@@ -24,8 +24,7 @@ import torchvision.models as models
 os.environ['MASTER_ADDR'] = '192.168.68.58'
 # set master node port
 # **caution**: avoid port conflict
-os.environ['MASTER_PORT'] = '1234'
-
+os.environ['MASTER_PORT'] = '8888'
 
 # os.environ['MASTER_ADDR'] = '192.168.68.58'
 # os.environ['CUDA_VISIBLE_DEVICES'] ='0,1,2,3'
@@ -63,7 +62,7 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)',
                     dest='weight_decay')
-parser.add_argument('-p', '--print-freq', default=10, type=int,
+parser.add_argument('-p', '--print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
@@ -91,7 +90,6 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'multi node data parallel training')
 
 best_acc1 = 0
-
 
 def main():
     args = parser.parse_args()
@@ -128,6 +126,7 @@ def main():
     else:
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
+    model.cuda()
 
     # step 6
     # wrap model with distributeddataparallel
@@ -180,10 +179,7 @@ def main():
             normalize,
         ]))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
