@@ -80,12 +80,17 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
 best_acc1 = 0
 
 
+"""
+这里的参数设置是为了 使得 基于 dist-url = env:// 的方式能够生效.
+"""
+
 # set master node address
 # recommend setting to ib NIC to gain bigger communication bandwidth
 os.environ['MASTER_ADDR'] = '192.168.68.58'
 # set master node port
 # **caution**: avoid port conflict
-os.environ['MASTER_PORT'] = '8889'
+os.environ['MASTER_PORT'] = '8877'
+
 
 def main():
     args = parser.parse_args()
@@ -225,16 +230,6 @@ def main_worker(gpu, ngpus_per_node, args):
             normalize,
         ]))
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-
-
     test_dataset = datasets.ImageFolder(
         valdir,
         transforms.Compose([
@@ -244,7 +239,16 @@ def main_worker(gpu, ngpus_per_node, args):
             normalize,
             ]))
 
-    test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
+    else:
+        train_sampler = None
+        test_sampler = None
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
         test_dataset,batch_size=args.batch_size, shuffle=(train_sampler is None),

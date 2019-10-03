@@ -58,14 +58,16 @@ def parse():
                         ' (default: resnet18)')
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=90, type=int, metavar='N',
+    parser.add_argument('--epochs', default=9, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N', help='mini-batch size per process (default: 256)')
     parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                        metavar='LR', help='Initial learning rate.  Will be scaled by <global batch size>/256: args.lr = args.lr*float(args.batch_size*args.world_size)/256.  A warmup schedule will also be applied over the first 5 epochs.')
+                        metavar='LR', help='Initial learning rate.  \
+                        Will be scaled by <global batch size>/256: args.lr = args.lr*float(args.batch_size*args.world_size)/256. \
+                        A warmup schedule will also be applied over the first 5 epochs.')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                         help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
@@ -78,7 +80,8 @@ def parse():
                         help='evaluate model on validation set')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
-
+    parser.add_argument('--num_classes', default=4, type=int,
+                    help='num of classes on train data.')
     parser.add_argument('--prof', default=-1, type=int,
                         help='Only run 10 iterations for profiling.')
     parser.add_argument('--deterministic', action='store_true')
@@ -131,9 +134,13 @@ def main():
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
         model = models.__dict__[args.arch](pretrained=True)
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, args.num_classes)
     else:
         print("=> creating model '{}'".format(args.arch))
         model = models.__dict__[args.arch]()
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, args.num_classes)
 
     if args.sync_bn:
         import apex
@@ -196,8 +203,8 @@ def main():
         # crop_size = 299
         # val_size = 320 # I chose this value arbitrarily, we can adjust.
     else:
-        crop_size = 224
-        val_size = 256
+        crop_size = 112
+        val_size = 128
 
     train_dataset = datasets.ImageFolder(
         traindir,
@@ -360,7 +367,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             # iteration, since they incur an allreduce and some host<->device syncs.
 
             # Measure accuracy
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
    
             # Average loss and accuracy across processes for logging 
             if args.distributed:
@@ -427,7 +434,7 @@ def validate(val_loader, model, criterion):
             loss = criterion(output, target)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+        prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
 
         if args.distributed:
             reduced_loss = reduce_tensor(loss.data)
@@ -528,7 +535,7 @@ def accuracy(output, target, topk=(1,)):
 
 def reduce_tensor(tensor):
     rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= args.world_size
     return rt
 

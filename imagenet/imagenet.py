@@ -26,11 +26,6 @@ os.environ['MASTER_ADDR'] = '192.168.68.58'
 # **caution**: avoid port conflict
 os.environ['MASTER_PORT'] = '8888'
 
-# os.environ['MASTER_ADDR'] = '192.168.68.58'
-# os.environ['CUDA_VISIBLE_DEVICES'] ='0,1,2,3'
-# os.environ['MASTER_PORT'] = '8888'
-# os.environ['WORLD_SIZE'] = '4'
-
 
 model_names = sorted(name for name in models.__dict__
     if name.islower() and not name.startswith("__")
@@ -46,11 +41,11 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                         ' (default: resnet18)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', default=90, type=int, metavar='N',
+parser.add_argument('--epochs', default=2, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=256, type=int,
+parser.add_argument('-b', '--batch-size', default=32, type=int,
                     metavar='N',
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
@@ -189,16 +184,22 @@ def main():
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
-    test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+
+    test_dataset = datasets.ImageFolder(
+        valdir,
+        transforms.Compose([
+            transforms.Resize(128),
+            transforms.CenterCrop(112),
             transforms.ToTensor(),
             normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True,sampler=test_sampler)
+            ]))
+
+    test_sampler = torch.utils.data.distributed.DistributedSampler(test_dataset)
+
+    val_loader = torch.utils.data.DataLoader(
+        test_dataset,batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=test_sampler)
+
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
